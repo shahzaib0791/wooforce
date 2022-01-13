@@ -1,0 +1,71 @@
+<?php
+
+
+require_once WOOFORCE_PLUGIN_PATH . '/helpers/class-wooforce-helpers.php';
+require_once WOOFORCE_PLUGIN_PATH . '/inc/class-wooforce-quotes.php';
+
+
+class WooForceOpportunities {
+
+    public static function create_update_quote($id,$post,$updated)
+    {
+        
+    }
+    public static function insert_opportunities() {
+
+        global $wpdb;
+
+        $user_id = get_current_user_id();
+        $company_name = get_user_meta($user_id, 'billing_company', true);
+        $next_month = date('Y-m-d', strtotime('+1 month'));
+        $sf_version = WooForceHelpers::get_sf_version_url();
+
+
+        $args = [
+            'headers' => [
+                'Authorization' => 'Bearer ' . get_option('wf_salesforce_token'),
+                'Content-Type' => 'application/json'
+            ],
+        ];
+        $account_id = wp_remote_get(BASE_URL . $sf_version . '/query/?q=SELECT+Id+from+Account+WHERE+name+LIKE+'. "'test company'", $args);
+        $account_id = json_decode(wp_remote_retrieve_body($account_id));
+        $account_id = $account_id->records->id;
+
+        $body = [
+            'Name' => $company_name,
+            'CloseDate' => $next_month,
+            'StageName' => 'New',
+            'AccountId' => $account_id,
+            'Subsidiary__c' => 'AlphaProMed LLC',
+            'Type_of_Bid__c' => 'Outbound'
+        ];
+
+        $args = [
+            'body' => json_encode($body),
+            'timeout' => '5',
+            'redirection' => '5',
+            'httpversion' => '1.0',
+            'blocking' => true,
+            'headers' => [
+                'Authorization' => 'Bearer ' . get_option('wf_salesforce_token'),
+                'Content-Type' => 'application/json'
+            ],
+        ];
+
+        $insert_opportunity = wp_remote_post(BASE_URL . $sf_version . '/sobjects/Opportunity/', $args);
+        $response_body = json_decode(wp_remote_retrieve_body($insert_opportunity));
+
+        $table_name = $wpdb->prefix . "sf_opportunities";
+        $wpdb->insert($table_name, [
+            'sf_account_id' => $account_id,
+            'sf_opportunity_id' => $response_body->id,
+            'opportunity_name' => $company_name,
+            'opportunity_stage_name' => 'New',
+            'opportunity_subsidiary__c' => 'AlphaProMed LLC',
+            'opportunity_type_of_bid__c' => 'Outbound'
+        ]);
+
+        WooForceQuotes::insert_quotes($response_body->id);
+
+    }
+}

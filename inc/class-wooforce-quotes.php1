@@ -1,0 +1,51 @@
+<?php
+
+
+require_once WOOFORCE_PLUGIN_PATH . '/helpers/class-wooforce-helpers.php';
+
+
+class WooForceQuotes {
+
+    public static function insert_quotes($opportunity_id) {
+
+        global $wpdb;
+
+        $body = [
+            'OpportunityId' => $opportunity_id,
+            'Name' => $_POST['quote_name'],
+            'ExpirationDate' => $_POST['expiration_date'],
+            'Status' => 'In Review',
+            'GrandTotal' => $_POST['total'],
+            'SubTotal' => $_POST['sub_total']
+        ];
+
+        $args = [
+            'body' => json_encode($body),
+            'timeout' => '5',
+            'redirection' => '5',
+            'httpversion' => '1.0',
+            'blocking' => true,
+            'headers' => [
+                'Authorization' => 'Bearer ' . get_option('wf_salesforce_token'),
+                'Content-Type' => 'application/json'
+            ],
+        ];
+
+//if salesforce to woocmeorce then status of the order will be "In review"
+        // if woocomerce
+
+        //defautl expiry fo qyoteq 3 days
+
+        $sf_version= WooForceHelpers::get_sf_version_url();
+        $insert_quote = wp_remote_post(BASE_URL . $sf_version . '/sobjects/Quote/', $args);
+        $response_body = json_decode(wp_remote_retrieve_body($insert_quote));
+
+        $table_name = $wpdb->prefix . "sf_quotes";
+        $wpdb->insert($table_name, [
+            'sf_opportunity_id' => $opportunity_id,
+            'sf_quote_id' => $response_body->id,
+            'quote_name' => $_POST['quote_name'],
+            'quote_expiration_date' => $_POST['expiration_date']
+        ]);
+    }
+}
